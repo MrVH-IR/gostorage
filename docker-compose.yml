@@ -1,0 +1,132 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: gostorage_db
+      POSTGRES_USER: gostorage
+      POSTGRES_PASSWORD: gostorage
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gostorage -d gostorage_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  node1:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    command: ["/app/storage-node"]
+    environment:
+      LISTEN_ADDR: ":8081"
+      NODE_ID: "10000000-0000-4000-8000-000000000001"
+      NODE_NAME: node1
+      NODE_ADDR: http://node1:8081
+      NODE_CAPACITY_BYTES: "10737418240"
+      COORDINATOR_URL: http://coordinator:8080
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-local-development-token-change-me}
+      STORAGE_DIR: /data
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - node1-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/internal/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  node2:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    command: ["/app/storage-node"]
+    environment:
+      LISTEN_ADDR: ":8082"
+      NODE_ID: "20000000-0000-4000-8000-000000000002"
+      NODE_NAME: node2
+      NODE_ADDR: http://node2:8082
+      NODE_CAPACITY_BYTES: "10737418240"
+      COORDINATOR_URL: http://coordinator:8080
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-local-development-token-change-me}
+      STORAGE_DIR: /data
+    ports:
+      - "127.0.0.1:8082:8082"
+    volumes:
+      - node2-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/internal/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  node3:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    command: ["/app/storage-node"]
+    environment:
+      LISTEN_ADDR: ":8083"
+      NODE_ID: "30000000-0000-4000-8000-000000000003"
+      NODE_NAME: node3
+      NODE_ADDR: http://node3:8083
+      NODE_CAPACITY_BYTES: "10737418240"
+      COORDINATOR_URL: http://coordinator:8080
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-local-development-token-change-me}
+      STORAGE_DIR: /data
+    ports:
+      - "127.0.0.1:8083:8083"
+    volumes:
+      - node3-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8083/internal/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    command: ["/app/migrate", "up"]
+    environment:
+      DATABASE_URL: postgres://gostorage:gostorage@postgres:5432/gostorage_db?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  coordinator:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    command: ["/app/coordinator"]
+    environment:
+      DATABASE_URL: postgres://gostorage:gostorage@postgres:5432/gostorage_db?sslmode=disable
+      LISTEN_ADDR: ":8080"
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-local-development-token-change-me}
+      MAX_FILE_BYTES: ${MAX_FILE_BYTES:-104857600}
+      MAX_NODES: ${MAX_NODES:-32}
+      MAX_CONCURRENT_UPLOADS: ${MAX_CONCURRENT_UPLOADS:-4}
+      HEARTBEAT_TTL: ${HEARTBEAT_TTL:-30s}
+      REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-2m}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      node1:
+        condition: service_healthy
+      node2:
+        condition: service_healthy
+      node3:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  node1-data:
+  node2-data:
+  node3-data:

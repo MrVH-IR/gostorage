@@ -1,0 +1,10 @@
+.env
+*.log
+/bin/
+/data/
+.idea/
+*.swp
+.DS_Store
+AGENTS.md
+PROJECT_TREE.txt
+TASKS.md
